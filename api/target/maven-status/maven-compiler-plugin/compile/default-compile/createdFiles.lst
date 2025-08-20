@@ -1,8 +1,3 @@
-org/openmrs/module/childnutrition/api/dao/ChildnutritionDao.class
-org/openmrs/module/childnutrition/api/ChildnutritionService.class
-org/openmrs/module/childnutrition/encounter/ChildNutritionEncounterSaveHandler.class
-org/openmrs/module/childnutrition/ChildnutritionConfig.class
-org/openmrs/module/childnutrition/metadata/ChildNutritionMetadataInstaller.class
-org/openmrs/module/childnutrition/api/impl/ChildnutritionServiceImpl.class
 org/openmrs/module/childnutrition/ChildnutritionActivator.class
-org/openmrs/module/childnutrition/Item.class
+org/openmrs/module/childnutrition/ChildNutritionEncounterSaveHandler.class
+org/openmrs/module/childnutrition/ChildnutritionConfig.class

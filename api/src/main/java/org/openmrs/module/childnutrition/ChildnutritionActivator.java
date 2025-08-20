@@ -12,7 +12,6 @@ package org.openmrs.module.childnutrition;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.openmrs.module.BaseModuleActivator;
-import org.openmrs.module.childnutrition.metadata.ChildNutritionMetadataInstaller;
 
 /**
  * This class contains the logic that is run every time this module is either started or shutdown
@@ -25,15 +24,14 @@ public class ChildnutritionActivator extends BaseModuleActivator {
 	 * @see #started()
 	 */
 	public void started() {
-		log.info("Started Child nutrition");
-		new ChildNutritionMetadataInstaller().installOrUpdateProgramAndWorkflow();
+		log.info("Started Child nutrition module");
 	}
 	
 	/**
 	 * @see #shutdown()
 	 */
 	public void shutdown() {
-		log.info("Shutdown Child nutrition");
+		log.info("Shutdown Child nutrition module");
 	}
 	
 }

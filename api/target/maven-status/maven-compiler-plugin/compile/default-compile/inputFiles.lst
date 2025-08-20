@@ -1,8 +1,3 @@
+/Volumes/SidSSD/IdeaProjects/openmrs-module-childnutrition/api/src/main/java/org/openmrs/module/childnutrition/ChildNutritionEncounterSaveHandler.java
 /Volumes/SidSSD/IdeaProjects/openmrs-module-childnutrition/api/src/main/java/org/openmrs/module/childnutrition/ChildnutritionActivator.java
 /Volumes/SidSSD/IdeaProjects/openmrs-module-childnutrition/api/src/main/java/org/openmrs/module/childnutrition/ChildnutritionConfig.java
-/Volumes/SidSSD/IdeaProjects/openmrs-module-childnutrition/api/src/main/java/org/openmrs/module/childnutrition/Item.java
-/Volumes/SidSSD/IdeaProjects/openmrs-module-childnutrition/api/src/main/java/org/openmrs/module/childnutrition/api/ChildnutritionService.java
-/Volumes/SidSSD/IdeaProjects/openmrs-module-childnutrition/api/src/main/java/org/openmrs/module/childnutrition/api/dao/ChildnutritionDao.java
-/Volumes/SidSSD/IdeaProjects/openmrs-module-childnutrition/api/src/main/java/org/openmrs/module/childnutrition/api/impl/ChildnutritionServiceImpl.java
-/Volumes/SidSSD/IdeaProjects/openmrs-module-childnutrition/api/src/main/java/org/openmrs/module/childnutrition/encounter/ChildNutritionEncounterSaveHandler.java
-/Volumes/SidSSD/IdeaProjects/openmrs-module-childnutrition/api/src/main/java/org/openmrs/module/childnutrition/metadata/ChildNutritionMetadataInstaller.java

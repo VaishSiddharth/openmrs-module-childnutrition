@@ -3,7 +3,7 @@
  * v. 2.0. If a copy of the MPL was not distributed with this file, You can
  * obtain one at http://mozilla.org/MPL/2.0/.
  */
-package org.openmrs.module.childnutrition.encounter;
+package org.openmrs.module.childnutrition;
 
 import java.util.Date;
 
@@ -21,7 +21,6 @@ import org.openmrs.annotation.Handler;
 import org.openmrs.api.ProgramWorkflowService;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.handler.SaveHandler;
-import org.openmrs.module.childnutrition.ChildnutritionConfig;
 
 /**
  * Handles encounter saves for the Child Nutrition form: enrolls patients into the program when
