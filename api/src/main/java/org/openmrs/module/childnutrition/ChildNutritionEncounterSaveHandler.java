@@ -9,10 +9,10 @@ import java.util.Date;
 
 import org.openmrs.Concept;
 import org.openmrs.Encounter;
-import org.openmrs.EncounterType;
 import org.openmrs.Obs;
 import org.openmrs.Patient;
 import org.openmrs.PatientProgram;
+import org.openmrs.PatientState;
 import org.openmrs.Program;
 import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
@@ -28,112 +28,116 @@ import org.openmrs.api.handler.SaveHandler;
  */
 @Handler(supports = Encounter.class)
 public class ChildNutritionEncounterSaveHandler implements SaveHandler<Encounter> {
-	
-	@Override
-	public void handle(Encounter encounter, User currentUser, Date currentDate, String reason) {
-		if (encounter == null || encounter.getEncounterType() == null) {
-			return;
-		}
-		
-		EncounterType targetType = Context.getEncounterService().getEncounterTypeByUuid(
-		    ChildnutritionConfig.CHILD_NUTRITION_ENCOUNTER_TYPE_UUID);
-		if (targetType == null || !targetType.getUuid().equals(encounter.getEncounterType().getUuid())) {
-			return;
-		}
-		
-		Patient patient = encounter.getPatient();
-		ProgramWorkflowService pws = Context.getProgramWorkflowService();
-		Program program = pws.getProgramByUuid(ChildnutritionConfig.PROGRAM_CHILD_NUTRITION_UUID);
-		if (program == null) {
-			return; // Program not installed yet
-		}
-		
-		PatientProgram enrollment = getActiveEnrollment(patient, program);
-		if (enrollment == null) {
-			enrollment = new PatientProgram();
-			enrollment.setPatient(patient);
-			enrollment.setProgram(program);
-			enrollment.setDateEnrolled(encounter.getEncounterDatetime() != null ? encounter.getEncounterDatetime()
-			        : currentDate);
-			pws.savePatientProgram(enrollment);
-		}
-		
-		// Sync status from obs
-		Concept statusConcept = Context.getConceptService().getConceptByUuid(
-		    ChildnutritionConfig.CONCEPT_MALNUTRITION_STATUS_UUID);
-		if (statusConcept == null) {
-			return;
-		}
-		Concept statusValue = findLatestCodedObsValue(encounter, statusConcept);
-		if (statusValue == null) {
-			return;
-		}
-		
-		ProgramWorkflow workflow = null;
-		for (ProgramWorkflow wf : program.getWorkflows()) {
-			if (wf != null && ChildnutritionConfig.WORKFLOW_MALNUTRITION_STATUS_UUID.equals(wf.getUuid())) {
-				workflow = wf;
-				break;
-			}
-		}
-		if (workflow == null) {
-			return;
-		}
-		
-		ProgramWorkflowState targetState = null;
-		for (ProgramWorkflowState s : workflow.getStates()) {
-			if (statusValue.equals(s.getConcept())) {
-				targetState = s;
-				break;
-			}
-		}
-		if (targetState == null) {
-			return;
-		}
-		
-		// Determine current state in this workflow
-		org.openmrs.PatientState currentState = null;
-		for (org.openmrs.PatientState ps : enrollment.getStates()) {
-			if (ps.getState() != null
-			        && ps.getState().getProgramWorkflow() != null
-			        && ps.getState().getProgramWorkflow().equals(workflow)
-			        && ps.getEndDate() == null
-			        && (currentState == null || (ps.getStartDate() != null && (currentState.getStartDate() == null || ps
-			                .getStartDate().after(currentState.getStartDate()))))) {
-				currentState = ps;
-			}
-		}
-		
-		if (currentState == null || !targetState.equals(currentState.getState())) {
-			// Transition via domain API then save program
-			enrollment.transitionToState(targetState,
-			    encounter.getEncounterDatetime() != null ? encounter.getEncounterDatetime() : currentDate);
-			pws.savePatientProgram(enrollment);
-		}
-	}
-	
-	private PatientProgram getActiveEnrollment(Patient patient, Program program) {
-		ProgramWorkflowService pws = Context.getProgramWorkflowService();
-		for (PatientProgram pp : pws.getPatientPrograms(patient, program, null, null, null, null, false)) {
-			if (pp.getDateCompleted() == null && Boolean.FALSE.equals(pp.getVoided())) {
-				return pp;
-			}
-		}
-		return null;
-	}
-	
-	private Concept findLatestCodedObsValue(Encounter encounter, Concept questionConcept) {
-		Concept result = null;
-		Date latest = null;
-		for (Obs obs : encounter.getAllObs(false)) {
-			if (obs.getConcept() != null && questionConcept.equals(obs.getConcept()) && obs.getValueCoded() != null) {
-				Date obsDate = obs.getObsDatetime();
-				if (latest == null || (obsDate != null && obsDate.after(latest))) {
-					latest = obsDate;
-					result = obs.getValueCoded();
-				}
-			}
-		}
-		return result;
-	}
+
+    @Override
+    public void handle(Encounter encounter, User currentUser, Date currentDate, String reason) {
+        ProgramWorkflowService programWorkflowService = Context.getProgramWorkflowService();
+        Program program = programWorkflowService.getProgramByUuid(ChildnutritionConfig.PROGRAM_CHILD_NUTRITION_UUID);
+        if (program == null) {
+            return;
+        }
+
+        if (!isChildNutritionEncounter(encounter)) {
+            return;
+        }
+
+        PatientProgram patientProgram = getOrCreateActiveProgramEnrollment(programWorkflowService, encounter.getPatient(), program, encounter.getEncounterDatetime());
+        Concept statusConcept = Context.getConceptService().getConceptByUuid(ChildnutritionConfig.CONCEPT_MALNUTRITION_STATUS_UUID);
+        if (statusConcept == null) {
+            return;
+        }
+
+        Concept statusValue = findLatestCodedObsValue(encounter, statusConcept);
+        if (statusValue == null) {
+            return;
+        }
+
+        ProgramWorkflow programWorkflow = getWorkflowByUuid(program, ChildnutritionConfig.WORKFLOW_MALNUTRITION_STATUS_UUID);
+        if (programWorkflow == null) {
+            return;
+        }
+
+        ProgramWorkflowState targetState = getStateByConcept(programWorkflow, statusValue);
+        if (targetState == null) {
+            return;
+        }
+
+        PatientState currentState = getActiveState(patientProgram, programWorkflow);
+        if (currentState == null || !targetState.equals(currentState.getState())) {
+            patientProgram.transitionToState(targetState, encounter.getEncounterDatetime());
+            patientProgram.setLocation(encounter.getLocation());
+            programWorkflowService.savePatientProgram(patientProgram);
+        }
+    }
+
+    private boolean isChildNutritionEncounter(Encounter encounter) {
+        return encounter != null && encounter.getEncounterType() != null
+                && ChildnutritionConfig.CHILD_NUTRITION_ENCOUNTER_TYPE_UUID.equals(encounter.getEncounterType().getUuid());
+    }
+
+    private PatientProgram getOrCreateActiveProgramEnrollment(ProgramWorkflowService programWorkflowService, Patient patient, Program program,
+                                                       Date enrolledOn) {
+        PatientProgram activePatientProgram = getActiveProgramEnrollment(programWorkflowService, patient, program);
+        if (activePatientProgram != null) {
+            return activePatientProgram;
+        }
+        PatientProgram patientProgram = new PatientProgram();
+        patientProgram.setPatient(patient);
+        patientProgram.setProgram(program);
+        patientProgram.setDateEnrolled(enrolledOn);
+        return programWorkflowService.savePatientProgram(patientProgram);
+    }
+
+    private PatientProgram getActiveProgramEnrollment(ProgramWorkflowService programWorkflowService, Patient patient, Program program) {
+        for (PatientProgram patientProgram : programWorkflowService.getPatientPrograms(patient, program, null, null, null, null, false)) {
+            if (patientProgram.getDateCompleted() == null && patientProgram.getVoided().equals(Boolean.FALSE)) {
+                return patientProgram;
+            }
+        }
+        return null;
+    }
+
+    private Concept findLatestCodedObsValue(Encounter encounter, Concept questionConcept) {
+        Concept result = null;
+        Date latest = null;
+        for (Obs obs : encounter.getAllObs(false)) {
+            if (questionConcept.equals(obs.getConcept()) && obs.getValueCoded() != null) {
+                Date obsDate = obs.getObsDatetime();
+                if (latest == null || (obsDate != null && obsDate.after(latest))) {
+                    latest = obsDate;
+                    result = obs.getValueCoded();
+                }
+            }
+        }
+        return result;
+    }
+
+    private ProgramWorkflow getWorkflowByUuid(Program program, String workflowUuid) {
+        for (ProgramWorkflow programWorkflow : program.getWorkflows()) {
+            if (programWorkflow != null && workflowUuid.equals(programWorkflow.getUuid())) {
+                return programWorkflow;
+            }
+        }
+        return null;
+    }
+
+    private ProgramWorkflowState getStateByConcept(ProgramWorkflow programWorkflow, Concept concept) {
+        for (ProgramWorkflowState programWorkflowState : programWorkflow.getStates()) {
+            if (concept.equals(programWorkflowState.getConcept())) {
+                return programWorkflowState;
+            }
+        }
+        return null;
+    }
+
+    private PatientState getActiveState(PatientProgram patientProgram, ProgramWorkflow programWorkflow) {
+        PatientState latest = null;
+        for (PatientState patientState : patientProgram.getStates()) {
+            if (patientState.getState() != null && programWorkflow.equals(patientState.getState().getProgramWorkflow()) && patientState.getEndDate() == null
+                    && (latest == null || patientState.getStartDate().after(latest.getStartDate()))) {
+                latest = patientState;
+            }
+        }
+        return latest;
+    }
 }
