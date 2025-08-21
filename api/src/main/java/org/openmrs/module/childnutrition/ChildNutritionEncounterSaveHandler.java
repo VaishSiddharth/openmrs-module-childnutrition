@@ -12,7 +12,6 @@ import org.openmrs.Encounter;
 import org.openmrs.Obs;
 import org.openmrs.Patient;
 import org.openmrs.PatientProgram;
-import org.openmrs.PatientState;
 import org.openmrs.Program;
 import org.openmrs.ProgramWorkflow;
 import org.openmrs.ProgramWorkflowState;
@@ -64,12 +63,20 @@ public class ChildNutritionEncounterSaveHandler implements SaveHandler<Encounter
 			return;
 		}
 		
-		PatientState currentState = getActiveState(patientProgram, programWorkflow);
-		if (currentState == null || !targetState.equals(currentState.getState())) {
-			patientProgram.transitionToState(targetState, encounter.getEncounterDatetime());
-			patientProgram.setLocation(encounter.getLocation());
-			programWorkflowService.savePatientProgram(patientProgram);
+		patientProgram.transitionToState(targetState, encounter.getEncounterDatetime());
+		patientProgram.setLocation(encounter.getLocation());
+		
+		if (targetState.getTerminal()) {
+			Date enrolled = patientProgram.getDateEnrolled();
+			if (enrolled != null && encounter.getEncounterDatetime() != null
+			        && encounter.getEncounterDatetime().before(enrolled)) {
+				patientProgram.setDateCompleted(enrolled);
+			} else {
+				patientProgram.setDateCompleted(encounter.getEncounterDatetime() != null ? encounter.getEncounterDatetime()
+				        : currentDate);
+			}
 		}
+		programWorkflowService.savePatientProgram(patientProgram);
 	}
 	
 	private boolean isChildNutritionEncounter(Encounter encounter) {
@@ -132,17 +139,5 @@ public class ChildNutritionEncounterSaveHandler implements SaveHandler<Encounter
 			}
 		}
 		return null;
-	}
-	
-	private PatientState getActiveState(PatientProgram patientProgram, ProgramWorkflow programWorkflow) {
-		PatientState latest = null;
-		for (PatientState patientState : patientProgram.getStates()) {
-			if (patientState.getState() != null && programWorkflow.equals(patientState.getState().getProgramWorkflow())
-			        && patientState.getEndDate() == null
-			        && (latest == null || patientState.getStartDate().after(latest.getStartDate()))) {
-				latest = patientState;
-			}
-		}
-		return latest;
 	}
 }
