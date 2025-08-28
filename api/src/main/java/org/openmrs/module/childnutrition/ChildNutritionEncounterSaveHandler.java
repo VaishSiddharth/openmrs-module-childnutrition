@@ -42,18 +42,27 @@ public class ChildNutritionEncounterSaveHandler implements SaveHandler<Encounter
 		
 		PatientProgram patientProgram = getOrCreateActiveProgramEnrollment(programWorkflowService, encounter.getPatient(),
 		    program, encounter.getEncounterDatetime());
-		Concept statusConcept = Context.getConceptService().getConceptByUuid(
-		    ChildnutritionConfig.CONCEPT_MALNUTRITION_STATUS_UUID);
-		if (statusConcept == null) {
+		Concept malnutritionStatusConcept = Context.getConceptService().getConceptByUuid(
+		    ChildnutritionConfig.CONCEPT_CHILD_NUTRITION_MALNUTRITION_STATUS_UUID);
+		if (malnutritionStatusConcept == null) {
 			return;
 		}
 		
-		Concept statusValue = findLatestCodedObsValue(encounter, statusConcept);
-		if (statusValue == null) {
+		Concept reasonForDischargeConcept = Context.getConceptService().getConceptByUuid(
+		    ChildnutritionConfig.CONCEPT_CHILD_NUTRITION_REASON_FOR_DISCHARGE_UUID);
+		if (reasonForDischargeConcept == null) {
 			return;
 		}
 		
-		ProgramWorkflow programWorkflow = getWorkflowByUuid(program, ChildnutritionConfig.WORKFLOW_MALNUTRITION_STATUS_UUID);
+		Concept malnutritionStatusValue = findLatestCodedObsValue(encounter, malnutritionStatusConcept);
+		Concept reasonForDischargeValue = findLatestCodedObsValue(encounter, reasonForDischargeConcept);
+		if (malnutritionStatusValue == null && reasonForDischargeValue == null) {
+			return;
+		}
+		
+		Concept statusValue = reasonForDischargeValue == null ? malnutritionStatusValue : reasonForDischargeValue;
+		
+		ProgramWorkflow programWorkflow = getWorkflowByUuid(program, ChildnutritionConfig.WORKFLOW_CHILD_NUTRITION_UUID);
 		if (programWorkflow == null) {
 			return;
 		}
@@ -63,19 +72,23 @@ public class ChildNutritionEncounterSaveHandler implements SaveHandler<Encounter
 			return;
 		}
 		
-		patientProgram.transitionToState(targetState, encounter.getEncounterDatetime());
-		patientProgram.setLocation(encounter.getLocation());
+		Date programStatusUpdateDate;
+		Date enrolled = patientProgram.getDateEnrolled();
+		if (enrolled != null && encounter.getEncounterDatetime() != null
+		        && encounter.getEncounterDatetime().before(enrolled)) {
+			programStatusUpdateDate = enrolled;
+		} else if (encounter.getEncounterDatetime() != null) {
+			programStatusUpdateDate = encounter.getEncounterDatetime();
+		} else {
+			programStatusUpdateDate = currentDate;
+		}
+		
+		patientProgram.transitionToState(targetState, programStatusUpdateDate);
 		
 		if (targetState.getTerminal()) {
-			Date enrolled = patientProgram.getDateEnrolled();
-			if (enrolled != null && encounter.getEncounterDatetime() != null
-			        && encounter.getEncounterDatetime().before(enrolled)) {
-				patientProgram.setDateCompleted(enrolled);
-			} else {
-				patientProgram.setDateCompleted(encounter.getEncounterDatetime() != null ? encounter.getEncounterDatetime()
-				        : currentDate);
-			}
+			patientProgram.setDateCompleted(programStatusUpdateDate);
 		}
+		patientProgram.setLocation(encounter.getLocation());
 		programWorkflowService.savePatientProgram(patientProgram);
 	}
 	
